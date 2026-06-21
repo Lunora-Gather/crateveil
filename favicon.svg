@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Retro background border -->
+  <rect width="64" height="64" rx="14" fill="#10131f" stroke="#4ecdc4" stroke-width="4"/>
+  <!-- Crate outer frame -->
+  <rect x="14" y="14" width="36" height="36" rx="4" fill="#b87935" stroke="#7c4b24" stroke-width="3"/>
+  <!-- Cross bracing (retro style) -->
+  <line x1="15.5" y1="15.5" x2="48.5" y2="48.5" stroke="#7c4b24" stroke-width="4"/>
+  <line x1="48.5" y1="15.5" x2="15.5" y2="48.5" stroke="#7c4b24" stroke-width="4"/>
+  <!-- Corner bolts/accents -->
+  <rect x="17" y="17" width="30" height="30" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="4 4"/>
+  <circle cx="19" cy="19" r="2" fill="#ffd166"/>
+  <circle cx="45" cy="45" r="2" fill="#ffd166"/>
+  <circle cx="45" cy="19" r="2" fill="#ffd166"/>
+  <circle cx="19" cy="45" r="2" fill="#ffd166"/>
+</svg>

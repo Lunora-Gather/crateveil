@@ -1,0 +1,18 @@
+{
+  "name": "Crateveil",
+  "short_name": "Crateveil",
+  "description": "A retro Sokoban puzzle game for the web.",
+  "start_url": "/crateveil/",
+  "display": "standalone",
+  "background_color": "#10131f",
+  "theme_color": "#10131f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
