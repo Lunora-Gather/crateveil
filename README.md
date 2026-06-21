@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://lunora-gather.github.io/crateveil/" target="_blank">
+    <img src="https://img.shields.io/badge/PLAY_LIVE_DEMO-Play_Now!-00ffd5?style=for-the-badge&logo=googleplay&logoColor=05060a" alt="Play Live Demo">
+  </a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Tech-HTML5_/_CSS3_/_JS_ES6-teal?style=for-the-badge" alt="Tech Stack">
   <img src="https://img.shields.io/badge/Audio-Web_Audio_API_Synthesizer-orange?style=for-the-badge" alt="Audio Synthesizer">
   <img src="https://img.shields.io/badge/Layout-Glassmorphic_Responsive-blue?style=for-the-badge" alt="Responsive Grid">
