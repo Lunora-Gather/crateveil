@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#090b11">
+  <title>Crateveil - A Retro Sokoban Puzzle Game</title>
+  <meta name="description" content="A retro CRT style Sokoban puzzle game. Push the crates, reveal the maze. Desktop keyboard and mobile touch D-pad supported.">
+  
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="apple-touch-icon" href="./favicon.svg">
+  
+  <!-- High Quality Retro-Futuristic Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body class="theme-crt">
+
+  <!-- Screen Filters & Overlays -->
+  <div class="crt-overlay"></div>
+  <div class="crt-flicker"></div>
+  <div class="vignette"></div>
+  <div class="analog-static"></div>
+
+  <!-- Main Game Container -->
+  <div id="app-container">
+    
+    <!-- 1. HOME SCREEN -->
+    <section id="home-screen" class="screen">
+      <div class="brand-container">
+        <h1 class="game-title" data-text="CRATEVEIL">CRATEVEIL</h1>
+        <div class="title-divider">
+          <span class="divider-line"></span>
+          <span class="divider-dot"></span>
+          <span class="divider-line"></span>
+        </div>
+        <p class="game-subtitle">A Retro Sokoban Puzzle Game</p>
+        <p class="game-tagline">Push the crates. Reveal the maze.</p>
+      </div>
+
+      <div class="menu-buttons">
+        <button id="btn-start" class="game-button primary-btn" aria-label="Start Game">Start Game</button>
+        <button id="btn-levels-menu" class="game-button" aria-label="Level Select">Level Select</button>
+        <button id="btn-help-menu" class="game-button" aria-label="How to Play">How to Play</button>
+        <button id="btn-settings-menu" class="game-button" aria-label="Settings">Settings</button>
+      </div>
+
+      <footer class="home-footer">
+        <p>v1.0.0 · Created by Jiehu Wang</p>
+        <p class="small">Made for the web · Keyboard and touch supported</p>
+      </footer>
+    </section>
+
+    <!-- 2. GAME SCREEN (Dashboard Layout) -->
+    <section id="game-screen" class="screen hidden">
+      <header class="game-header">
+        <h2 class="game-logo" id="btn-logo-home">CRATEVEIL</h2>
+        <div class="level-indicator" id="level-display">Level 1 / 15</div>
+      </header>
+      <div class="game-layout-wrapper">
+        
+        <!-- Left Column: Primary Board Screen -->
+        <div class="game-main-column">
+
+          <!-- Mobile Only Stats (hidden on desktop) -->
+          <div class="stats-panel mobile-only-hud">
+            <div class="stat-box">
+              <span class="stat-label">Moves</span>
+              <span class="stat-val moves-count-val">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Best</span>
+              <span class="stat-val best-count-val">--</span>
+            </div>
+          </div>
+
+          <!-- Desktop Settings Bar (hidden on mobile) -->
+          <div class="desktop-settings-bar">
+            <span class="settings-label">Settings:</span>
+            <button id="btn-desktop-sound" class="desktop-setting-btn" aria-label="Toggle Sound">Sound: ON</button>
+            <button id="btn-desktop-theme" class="desktop-setting-btn" aria-label="Toggle Theme">Theme: CRT</button>
+          </div>
+
+          <main class="game-viewport">
+            <div id="game-board" class="board"></div>
+          </main>
+
+          <!-- Mobile Only D-pad (hidden on desktop) -->
+          <div id="mobile-controls" class="dpad-container">
+            <div class="dpad-row">
+              <button id="dpad-up" class="dpad-button" aria-label="Move Up">▲</button>
+            </div>
+            <div class="dpad-row">
+              <button id="dpad-left" class="dpad-button" aria-label="Move Left">◀</button>
+              <div class="dpad-center">●</div>
+              <button id="dpad-right" class="dpad-button" aria-label="Move Right">▶</button>
+            </div>
+            <div class="dpad-row">
+              <button id="dpad-down" class="dpad-button" aria-label="Move Down">▼</button>
+            </div>
+          </div>
+
+          <!-- Mobile Only Bottom Controls (hidden on desktop) -->
+          <footer class="game-controls-menu mobile-only-hud">
+            <button id="btn-game-restart" class="control-btn" aria-label="Restart Level">Restart</button>
+            <button id="btn-game-undo" class="control-btn" aria-label="Undo Move">Undo</button>
+            <button id="btn-game-next" class="control-btn hidden" aria-label="Next Level">Next</button>
+            <button id="btn-game-levels" class="control-btn" aria-label="Back to Level Select">Levels</button>
+            <button id="btn-game-help" class="control-btn" aria-label="How to Play Help">Help</button>
+          </footer>
+        </div>
+
+        <!-- Right Column: Sidebar Console (Desktop only, hidden on mobile) -->
+        <div class="game-sidebar-column">
+          <div class="sidebar-section-title">DASHBOARD</div>
+          
+          <div class="stats-panel">
+            <div class="stat-box">
+              <span class="stat-label">Moves</span>
+              <span class="stat-val moves-count-val">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Best</span>
+              <span class="stat-val best-count-val">--</span>
+            </div>
+          </div>
+
+          <div class="sidebar-section-title">CONTROLS</div>
+          <div class="sidebar-controls-group">
+            <button id="btn-sidebar-restart" class="sidebar-btn" aria-label="Restart Level">Restart [R]</button>
+            <button id="btn-sidebar-undo" class="sidebar-btn" aria-label="Undo Move">Undo [U]</button>
+            <button id="btn-sidebar-next" class="sidebar-btn primary-btn hidden" aria-label="Next Level">Next [N]</button>
+          </div>
+
+          <div class="sidebar-section-title">QUICK LOAD</div>
+          <div id="sidebar-levels-grid" class="sidebar-levels-grid"></div>
+
+          <div class="sidebar-footer">
+            <button id="btn-sidebar-help" class="sidebar-footer-btn" aria-label="How to play instructions">Help</button>
+            <button id="btn-sidebar-home" class="sidebar-footer-btn" aria-label="Back to home menu">Menu</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3. LEVEL SELECT SCREEN -->
+    <section id="level-select-screen" class="screen hidden">
+      <h2 class="screen-title">Select Level</h2>
+      <div id="levels-grid" class="levels-grid"></div>
+      <div class="screen-actions">
+        <button id="btn-levels-back" class="game-button" aria-label="Back to main menu">Back</button>
+      </div>
+    </section>
+
+    <!-- 4. HELP SCREEN -->
+    <section id="help-screen" class="screen hidden">
+      <h2 class="screen-title">How to Play</h2>
+      
+      <div class="help-content">
+        <p class="help-desc-en">Move the player through the maze and push every crate onto a glowing target.</p>
+        
+        <h3 class="help-section-title">Rules</h3>
+        <ul class="help-rules-list">
+          <li>You can move up, down, left, and right.</li>
+          <li>You can push one crate at a time.</li>
+          <li>Crates cannot be pulled.</li>
+          <li>Walls block both the player and crates.</li>
+          <li>The level is cleared when all crates are on targets.</li>
+        </ul>
+
+        <h3 class="help-section-title">Controls</h3>
+        <ul class="help-controls-list">
+          <li><strong>Keyboard:</strong> Arrow Keys or W A S D</li>
+          <li><strong>Restart Level:</strong> R</li>
+          <li><strong>Undo Move:</strong> U</li>
+          <li><strong>Next Level:</strong> N</li>
+          <li><strong>Back / Close:</strong> Esc</li>
+          <li><strong>Mobile:</strong> Touch on-screen buttons</li>
+        </ul>
+
+        <hr class="help-divider">
+
+        <p class="help-desc-zh">移动角色，把所有箱子推到发光目标点即可通关。箱子只能推不能拉，不能穿墙，也不能互相重叠。</p>
+      </div>
+
+      <div class="screen-actions">
+        <button id="btn-help-back" class="game-button" aria-label="Back to previous screen">Back</button>
+      </div>
+    </section>
+
+    <!-- 5. SETTINGS SCREEN -->
+    <section id="settings-screen" class="screen hidden">
+      <h2 class="screen-title">Settings</h2>
+
+      <div class="settings-options">
+        <div class="setting-row">
+          <label for="setting-sound">Sound Effects</label>
+          <button id="setting-sound" class="toggle-btn" aria-label="Toggle Sound">Sound: ON</button>
+        </div>
+
+        <div class="setting-row">
+          <label for="setting-theme">Screen Filter</label>
+          <button id="setting-theme" class="toggle-btn" aria-label="Toggle CRT Scanlines">Theme: CRT</button>
+        </div>
+
+        <div class="setting-row danger-zone">
+          <label>Reset Progress</label>
+          <button id="btn-reset-progress" class="danger-btn" aria-label="Reset all game progress">Reset Progress</button>
+        </div>
+      </div>
+
+      <div class="screen-actions">
+        <button id="btn-settings-back" class="game-button" aria-label="Back to main menu">Back</button>
+      </div>
+    </section>
+
+    <!-- 6. WIN MODAL OVERLAY -->
+    <div id="win-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3 class="modal-title">Level Cleared!</h3>
+        
+        <div class="modal-stats">
+          <div class="modal-stat-row">
+            <span>Moves:</span>
+            <span id="win-moves">0</span>
+          </div>
+          <div class="modal-stat-row">
+            <span>Best:</span>
+            <span id="win-best">--</span>
+          </div>
+        </div>
+
+        <div class="modal-buttons">
+          <button id="btn-modal-next" class="game-button primary-btn" aria-label="Proceed to Next Level">Next Level</button>
+          <button id="btn-modal-restart" class="game-button" aria-label="Replay Level">Restart</button>
+          <button id="btn-modal-levels" class="game-button" aria-label="Go to level select screen">Level Select</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. ENDING SCREEN -->
+    <section id="ending-screen" class="screen hidden">
+      <div class="ending-container">
+        <h2 class="ending-title">All Levels Cleared!</h2>
+        <div class="ending-trophy">🏆</div>
+        <p class="ending-message">You have revealed every maze in Crateveil.</p>
+        <p class="ending-thanks">Thank you for playing!</p>
+        
+        <div class="ending-buttons">
+          <button id="btn-ending-again" class="game-button primary-btn" aria-label="Play Game Again">Play Again</button>
+          <button id="btn-ending-levels" class="game-button" aria-label="Go to level selection screen">Level Select</button>
+          <button id="btn-ending-reset" class="game-button danger-btn" aria-label="Reset all progress and start fresh">Reset Progress</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONFIRMATION MODAL -->
+    <div id="confirm-modal" class="modal hidden">
+      <div class="modal-content confirm-content">
+        <h3 class="modal-title warning">Reset all progress?</h3>
+        <p class="confirm-message">This action cannot be undone. All your best moves and cleared levels will be lost.</p>
+        <div class="modal-buttons">
+          <button id="btn-confirm-cancel" class="game-button" aria-label="Cancel reset">Cancel</button>
+          <button id="btn-confirm-ok" class="game-button danger-btn" aria-label="Confirm reset">Reset</button>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- /#app-container -->
+
+  <!-- Entry Script -->
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
