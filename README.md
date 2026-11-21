@@ -24,12 +24,12 @@
 
 ## 📟 Cyber-Terminal Features
 
-*   **📺 Premium Glassmorphism Console**: A centered glowing game console featuring a scrolling grid backdrop, subtle crt flicker, vignette framing, and bright neon teal borders.
+*   **📺 Premium Glassmorphism Console**: A centered glowing game console with a grid backdrop, CRT scanlines, vignette framing, and neon teal borders.
 *   **🔊 Procedural Audio Synthesis**: Ambient background drone hums and action sound effects (steps, pushes, wall bumps, chimes) are synthesized dynamically in code using the browser's native **Web Audio API**—zero audio file downloads required.
 *   **📱 Native-Feel Swipe & D-pad Controls**: Play comfortably on desktop with W/A/S/D or Arrow keys, or on mobile viewports using either the touch-screen D-pad or intuitive swipe gestures.
-*   **🧮 Auto-Responsive Board Scaling**: Intelligent grid calculations subtract inner margins, borders, and gaps to ensure even the largest level maps fit perfectly on portrait mobile screens or side-by-side desktop layouts without clipping.
+*   **🧮 Auto-Responsive Board Scaling**: The board scales to its available space on mobile and desktop. Short viewports can scroll to reach the controls.
 *   **🌓 Dual Display Modes**: Switch on-the-fly between a realistic **CRT Scanline Filter** mode and a clean, high-contrast **Dark Monochrome** mode.
-*   **💾 Local Data Persistence**: High scores (best moves), cleared levels, sound toggles, and current level index are saved automatically using `localStorage`.
+*   **💾 Local Data Persistence**: Unfinished boards and their full undo history are saved per level alongside best scores, cleared levels, and preferences. Continue Game resumes the last selected board. Restart clears that board's checkpoint. Reset Progress clears all boards and scores while keeping sound and theme preferences.
 
 ---
 
@@ -42,7 +42,7 @@
 | **Undo Move** | `U` | Tap `Undo` |
 | **Restart Level** | `R` | Tap `Restart` |
 | **Next Level** | `N` (Active after level clear) | Tap `Next Level` |
-| **Back / Exit** | `Escape` | Tap `Menu` / `Back` |
+| **Back / Close Dialog** | `Escape` | Tap `Menu` / `Back` |
 
 ---
 
@@ -53,8 +53,9 @@ Crateveil is built entirely with vanilla web technologies to maintain high perfo
 ```
 src/
 ├── main.js        # Bootstraps event bindings, callbacks, and screen transitions
-├── game.js        # Core Sokoban state machine (history stack, move validation, win checker)
-├── renderer.js    # Procedural board drawer and dynamic grid coordinate cell sizing
+├── game.js        # Movement, undo, and win detection
+├── levels.js      # The 15 level maps
+├── renderer.js    # Reusable board tiles and responsive sizing
 ├── input.js       # Listens to physical keyboards, click buttons, and swipe touch paths
 ├── sound.js       # Real-time Web Audio API synthesizer nodes (chimes, hums, thumps)
 ├── storage.js     # Manages high score persistence and progress saves
@@ -66,7 +67,7 @@ src/
 
 ## ⚙️ Local Installation & Development
 
-To run or build the project locally, ensure you have [Node.js](https://nodejs.org/) installed.
+To run or build the project locally, use [Node.js](https://nodejs.org/) 20.19+ on the 20.x line, or 22.12 or newer.
 
 1.  **Clone the repository**:
     ```bash
@@ -76,7 +77,7 @@ To run or build the project locally, ensure you have [Node.js](https://nodejs.or
 
 2.  **Install bundling dependencies**:
     ```bash
-    npm install
+    npm ci
     ```
 
 3.  **Launch local hot-reload dev server**:
@@ -96,16 +97,20 @@ To run or build the project locally, ensure you have [Node.js](https://nodejs.or
 
 ---
 
+## Verification
+
+- `npm test` solves all 15 maps using an independent breadth-first search and replays each solution through the game engine. It also checks checkpoints, legacy saves, interleaved score writes, and the audio lifecycle.
+- `npm run test:safari` builds the production site and opens it in the installed macOS Safari. It clears all 15 levels, checks layout at eight viewport sizes, reloads an unfinished board, and exercises shared storage in two open game pages. It uses an isolated localhost port and leaves existing Safari windows open.
+
 ## 🌐 Deployment to GitHub Pages
 
-The repository contains a custom GitHub Action workflow configuration in `.github/workflows/deploy.yml` that automatically builds and deploys the site to GitHub Pages whenever you push commits to the `main` branch.
+The workflow in `.github/workflows/deploy.yml` runs tests and builds the site on pull requests and pushes to `main`. On `main`, it deploys the build artifact to GitHub Pages.
 
-To enable:
-1. Push this project repository to GitHub under the name `crateveil`.
-2. Navigate to repository **Settings** &rarr; **Pages**.
-3. Under **Build and deployment** &rarr; **Source**, select **GitHub Actions**.
+Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. Repositories using the former `gh-pages` branch setup need to switch the source before running the updated workflow. The production base path is `/crateveil/`.
 
 ---
 
 ## 📄 License
 This project is open-source software licensed under the [MIT License](LICENSE).
+
+Outfit and Share Tech Mono ship with the game under the SIL Open Font License. [Outfit license](public/licenses/outfit.txt) · [Share Tech Mono license](public/licenses/share-tech-mono.txt)

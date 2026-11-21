@@ -1,175 +1,72 @@
-import { movePlayer, restartLevel, undoMove, nextLevel, state } from './game.js';
+import { movePlayer, restartLevel, state, undoMove } from './game.js';
 
-let escapeCallback = () => {};
+const movementKeys = {
+  arrowup: 'up',
+  w: 'up',
+  arrowdown: 'down',
+  s: 'down',
+  arrowleft: 'left',
+  a: 'left',
+  arrowright: 'right',
+  d: 'right'
+};
 
-export function initInput(onEscapePressed) {
-  escapeCallback = onEscapePressed;
+export function initInput({ canPlay, goBack, advance }) {
+  let gesture = null;
 
-  // 1. Keyboard Controls
-  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
 
-  // 2. Mobile D-pad Controls
-  setupDpadButton('dpad-up', 'up');
-  setupDpadButton('dpad-down', 'down');
-  setupDpadButton('dpad-left', 'left');
-  setupDpadButton('dpad-right', 'right');
-
-    // Prevent generic mobile double-tap zoom on controller area
-    const mobileControls = document.getElementById('mobile-controls');
-    if (mobileControls) {
-      mobileControls.addEventListener('touchstart', (e) => {
-        if (e.target.classList.contains('dpad-button')) {
-          e.preventDefault(); // Stop click delay and zooming
-        }
-      }, { passive: false });
+    gesture = null;
+    const key = event.key.toLowerCase();
+    if (key === 'escape' && !document.querySelector('dialog[open]')) {
+      if (!event.repeat) goBack();
+      return;
     }
-
-    // 3. Swipe Gesture Controls on Mobile
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchEndX = 0;
-    let touchEndY = 0;
-
-    const minSwipeDistance = 35; // Minimum distance in pixels to count as swipe
-
-    const handleTouchStart = (e) => {
-      touchStartX = e.changedTouches[0].screenX;
-      touchStartY = e.changedTouches[0].screenY;
-    };
-
-    const handleTouchEnd = (e) => {
-      // If modal is open or screens are hidden, ignore swipes
-      const winModalActive = !document.getElementById('win-modal').classList.contains('hidden');
-      const gameScreenActive = !document.getElementById('game-screen').classList.contains('hidden');
-      if (!gameScreenActive || winModalActive) return;
-
-      touchEndX = e.changedTouches[0].screenX;
-      touchEndY = e.changedTouches[0].screenY;
-
-      const diffX = touchEndX - touchStartX;
-      const diffY = touchEndY - touchStartY;
-
-      const absDiffX = Math.abs(diffX);
-      const absDiffY = Math.abs(diffY);
-
-      if (Math.max(absDiffX, absDiffY) < minSwipeDistance) {
-        return; // Too short
-      }
-
-      if (absDiffX > absDiffY) {
-        // Horizontal swipe
-        if (diffX > 0) {
-          movePlayer('right');
-        } else {
-          movePlayer('left');
-        }
-      } else {
-        // Vertical swipe
-        if (diffY > 0) {
-          movePlayer('down');
-        } else {
-          movePlayer('up');
-        }
-      }
-    };
-
-    const boardEl = document.getElementById('game-board');
-    if (boardEl) {
-      boardEl.addEventListener('touchstart', handleTouchStart, { passive: true });
-      boardEl.addEventListener('touchend', handleTouchEnd, { passive: true });
+    if (key === 'n') {
+      if (!event.repeat) advance();
+      return;
     }
-  }
+    if (!canPlay()) return;
 
-function handleKeyDown(e) {
-  // If the win modal is active or ending screen is active, block gameplay movements
-  const winModalActive = !document.getElementById('win-modal').classList.contains('hidden');
-  const endingScreenActive = !document.getElementById('ending-screen').classList.contains('hidden');
-  const levelSelectActive = !document.getElementById('level-select-screen').classList.contains('hidden');
-  const helpActive = !document.getElementById('help-screen').classList.contains('hidden');
-  const settingsActive = !document.getElementById('settings-screen').classList.contains('hidden');
-  const homeActive = !document.getElementById('home-screen').classList.contains('hidden');
-
-  const gameplayBlocked = winModalActive || endingScreenActive || levelSelectActive || helpActive || settingsActive || homeActive;
-
-  // Prevent browser scrolling with arrow keys
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
-    e.preventDefault();
-  }
-
-  // Handle shortcuts
-  switch (e.key.toLowerCase()) {
-    case 'r':
-      if (!homeActive && !endingScreenActive) {
-        restartLevel();
-      }
-      break;
-    case 'u':
-      if (!homeActive && !endingScreenActive) {
-        undoMove();
-      }
-      break;
-    case 'n':
-      if (!homeActive && !endingScreenActive) {
-        // If we won, next level is loaded. Otherwise, next shortcut is only active when completed.
-        if (state.isWin || e.shiftKey) { // Shift+N to force next level (for debugging/testing)
-          nextLevel();
-        }
-      }
-      break;
-    case 'escape':
-      escapeCallback();
-      break;
-  }
-
-  // Handle movement keys
-  if (gameplayBlocked) return;
-
-  switch (e.key) {
-    // Arrow keys
-    case 'ArrowUp':
-    case 'w':
-    case 'W':
-      movePlayer('up');
-      break;
-    case 'ArrowDown':
-    case 's':
-    case 'S':
-      movePlayer('down');
-      break;
-    case 'ArrowLeft':
-    case 'a':
-    case 'A':
-      movePlayer('left');
-      break;
-    case 'ArrowRight':
-    case 'd':
-    case 'D':
-      movePlayer('right');
-      break;
-  }
-}
-
-function setupDpadButton(elementId, direction) {
-  const btn = document.getElementById(elementId);
-  if (!btn) return;
-
-  // Use both touchstart (immediate) and mousedown/click for desktop emulator testing
-  const triggerMove = (e) => {
-    e.preventDefault();
-    
-    // Check if gameplay is currently blocked
-    const winModalActive = !document.getElementById('win-modal').classList.contains('hidden');
-    const gameScreenActive = !document.getElementById('game-screen').classList.contains('hidden');
-    
-    if (gameScreenActive && !winModalActive) {
-      movePlayer(direction);
+    if (Object.hasOwn(movementKeys, key)) {
+      event.preventDefault();
+      movePlayer(movementKeys[key]);
+    } else if (!event.repeat && key === 'r') {
+      restartLevel();
+    } else if (!event.repeat && key === 'u') {
+      undoMove();
     }
-  };
-
-  btn.addEventListener('touchstart', triggerMove, { passive: false });
-  btn.addEventListener('mousedown', (e) => {
-    // Trigger on mousedown only if touch is not used (to prevent double actions)
-    if (e.pointerType === 'touch') return;
-    triggerMove(e);
   });
+
+  for (const direction of ['up', 'down', 'left', 'right']) {
+    document.getElementById(`dpad-${direction}`).addEventListener('click', () => {
+      if (canPlay()) movePlayer(direction);
+    });
+  }
+
+  const board = document.getElementById('game-board');
+
+  board.addEventListener('pointerdown', event => {
+    if (!canPlay() || !event.isPrimary || event.pointerType === 'mouse') return;
+    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, tiles: state.baseTiles };
+    if (event.isTrusted) board.setPointerCapture(event.pointerId);
+  });
+
+  board.addEventListener('pointerup', event => {
+    if (gesture?.id !== event.pointerId) return;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    const sameBoard = gesture.tiles === state.baseTiles;
+    gesture = null;
+    if (!sameBoard || !canPlay() || Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+    movePlayer(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  });
+
+  for (const type of ['pointercancel', 'lostpointercapture']) {
+    board.addEventListener(type, event => {
+      if (gesture?.id === event.pointerId) gesture = null;
+    });
+  }
+  window.addEventListener('blur', () => { gesture = null; });
 }

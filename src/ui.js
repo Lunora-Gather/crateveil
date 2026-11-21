@@ -1,387 +1,288 @@
 import { levels } from './levels.js';
-import { state, loadLevel, restartLevel, undoMove, nextLevel } from './game.js';
-import { 
-  getCompletedLevels, 
-  getBestMoves, 
-  getLastLevel, 
-  getSoundSetting, 
-  getThemeSetting, 
-  saveThemeSetting, 
-  resetProgress 
+import { state, loadLevel, restartLevel, undoMove, flushCheckpoint } from './game.js';
+import {
+  getCheckpoint, getProgress, getProgressEpoch, getLastLevel, getSoundSetting, getThemeSetting,
+  isProgressChange, saveThemeSetting, resetProgress, soundKey, themeKey
 } from './storage.js';
-import { initSound, toggleSound, startAmbientDrone } from './sound.js';
-import { renderBoard } from './renderer.js';
+import { initSound, setSoundEnabled, toggleSound } from './sound.js';
 
-let previousScreen = 'home-screen';
+const byId = id => document.getElementById(id);
+
+let activeScreen = 'home-screen';
+let helpReturnScreen = 'home-screen';
+let helpReturnFocus;
+let epoch;
+let progress;
+let levelButtons;
+let quickButtons;
+let moveCounters;
+let undoButtons;
 
 export function initUI() {
-  // 1. Initialize settings from storage
-  const soundOn = getSoundSetting();
-  initSound(soundOn);
-  updateSoundButtonUI(soundOn);
+  levelButtons = buildLevelPicker(byId('levels-grid'));
+  quickButtons = buildLevelPicker(byId('sidebar-levels-grid'), true);
+  moveCounters = document.querySelectorAll('.moves-count-val');
+  undoButtons = ['btn-game-undo', 'btn-sidebar-undo'].map(byId);
+  epoch = getProgressEpoch();
+  refreshPickers();
+  updateStartButton();
 
-  const theme = getThemeSetting();
-  setThemeUI(theme);
-  updateThemeButtonUI(theme);
+  const sound = getSoundSetting();
+  initSound(sound);
+  updateSoundButtons(sound);
+  applyTheme(getThemeSetting());
 
-  // Setup first interaction listener to start synth drone
-  const triggerDroneStart = () => {
-    startAmbientDrone();
-    document.removeEventListener('click', triggerDroneStart);
-    document.removeEventListener('keydown', triggerDroneStart);
-    document.removeEventListener('touchstart', triggerDroneStart);
-  };
-  document.addEventListener('click', triggerDroneStart);
-  document.addEventListener('keydown', triggerDroneStart);
-  document.addEventListener('touchstart', triggerDroneStart);
-
-  // 2. Navigation bindings
-  bindClick('btn-start', () => {
-    const lastLvl = getLastLevel();
-    loadLevel(lastLvl);
-    showScreen('game-screen');
+  bind('btn-start', () => startLevel(getLastLevel()));
+  bind('btn-levels-menu', () => showScreen('level-select-screen'));
+  bind('btn-settings-menu', () => showScreen('settings-screen'));
+  bind(['btn-help-menu', 'btn-game-help', 'btn-sidebar-help'], event => {
+    helpReturnScreen = activeScreen;
+    helpReturnFocus = event.currentTarget;
+    showScreen('help-screen');
   });
+  bind(['btn-levels-back', 'btn-settings-back', 'btn-logo-home', 'btn-sidebar-home'], showHome);
+  bind('btn-help-back', goBack);
 
-  bindClick('btn-levels-menu', () => {
-    renderLevelsGrid();
+  bind(['btn-game-restart', 'btn-sidebar-restart'], restartLevel);
+  bind(['btn-game-undo', 'btn-sidebar-undo'], undoMove);
+  bind(['btn-game-next', 'btn-sidebar-next', 'btn-modal-next'], advance);
+  bind(['btn-game-levels', 'btn-modal-levels', 'btn-ending-levels'], () => {
+    byId('win-modal').close();
     showScreen('level-select-screen');
   });
-
-  bindClick('btn-help-menu', () => {
-    previousScreen = 'home-screen';
-    showScreen('help-screen');
-  });
-
-  bindClick('btn-settings-menu', () => {
-    showScreen('settings-screen');
-  });
-
-  // Back actions
-  bindClick('btn-levels-back', () => showScreen('home-screen'));
-  bindClick('btn-help-back', () => showScreen(previousScreen));
-  bindClick('btn-settings-back', () => showScreen('home-screen'));
-  bindClick('btn-logo-home', () => showScreen('home-screen'));
-
-  // 3. Mobile gameplay buttons
-  bindClick('btn-game-restart', () => restartLevel());
-  bindClick('btn-game-undo', () => undoMove());
-  bindClick('btn-game-levels', () => {
-    renderLevelsGrid();
-    showScreen('level-select-screen');
-  });
-  bindClick('btn-game-help', () => {
-    previousScreen = 'game-screen';
-    showScreen('help-screen');
-  });
-  bindClick('btn-game-next', () => handleNextLevelAction());
-
-  // 4. Desktop sidebar buttons
-  bindClick('btn-sidebar-restart', () => restartLevel());
-  bindClick('btn-sidebar-undo', () => undoMove());
-  bindClick('btn-sidebar-next', () => handleNextLevelAction());
-  bindClick('btn-sidebar-help', () => {
-    previousScreen = 'game-screen';
-    showScreen('help-screen');
-  });
-  bindClick('btn-sidebar-home', () => {
-    showScreen('home-screen');
-  });
-
-  // 5. Settings actions
-  const handleSoundToggle = () => {
-    const nowEnabled = toggleSound();
-    updateSoundButtonUI(nowEnabled);
-  };
-  bindClick('setting-sound', handleSoundToggle);
-  bindClick('btn-sidebar-sound', handleSoundToggle);
-  bindClick('btn-desktop-sound', handleSoundToggle);
-
-  const handleThemeToggle = () => {
-    const currentTheme = document.body.classList.contains('theme-crt') ? 'crt' : 'dark';
-    const nextTheme = currentTheme === 'crt' ? 'dark' : 'crt';
-    setThemeUI(nextTheme);
-    saveThemeSetting(nextTheme);
-    updateThemeButtonUI(nextTheme);
-  };
-  bindClick('setting-theme', handleThemeToggle);
-  bindClick('btn-sidebar-theme', handleThemeToggle);
-  bindClick('btn-desktop-theme', handleThemeToggle);
-
-  bindClick('btn-reset-progress', () => {
-    showModal('confirm-modal');
-  });
-
-  // Confirmation dialog
-  bindClick('btn-confirm-cancel', () => {
-    hideModal('confirm-modal');
-  });
-
-  bindClick('btn-confirm-ok', () => {
-    resetProgress();
-    hideModal('confirm-modal');
-    renderLevelsGrid();
-    renderSidebarLevelsGrid();
-    showScreen('home-screen');
-  });
-
-  // 6. Win Modal actions
-  bindClick('btn-modal-restart', () => {
-    hideModal('win-modal');
+  bind('btn-modal-restart', () => {
+    byId('win-modal').close();
     restartLevel();
   });
+  bind('btn-ending-again', () => startLevel(0));
 
-  bindClick('btn-modal-levels', () => {
-    hideModal('win-modal');
-    renderLevelsGrid();
-    showScreen('level-select-screen');
+  bind(['setting-sound', 'btn-desktop-sound'], () => updateSoundButtons(toggleSound()));
+  bind(['setting-theme', 'btn-desktop-theme'], () => {
+    const theme = document.body.classList.contains('theme-crt') ? 'dark' : 'crt';
+    saveThemeSetting(theme);
+    applyTheme(theme);
   });
 
-  bindClick('btn-modal-next', () => {
-    hideModal('win-modal');
-    handleNextLevelAction();
+  const confirm = byId('confirm-modal');
+  bind(['btn-reset-progress', 'btn-ending-reset'], () => confirm.showModal());
+  bind('btn-confirm-cancel', () => confirm.close());
+  bind('btn-confirm-ok', () => {
+    epoch = resetProgress();
+    refreshPickers();
+    confirm.close();
+    showHome();
   });
+  for (const dialog of document.querySelectorAll('dialog')) {
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      dialog.close();
+    });
+  }
 
-  // 7. Ending Screen actions
-  bindClick('btn-ending-again', () => {
-    loadLevel(0);
-    showScreen('game-screen');
+  window.addEventListener('storage', event => {
+    if (event.key === null || event.key === soundKey) syncSound();
+    if (event.key === null || event.key === themeKey) applyTheme(getThemeSetting());
+    if (isProgressChange(event.key)) syncProgress();
+    if (activeScreen === 'home-screen' && (event.key === null || event.key.startsWith('crateveil.'))) updateStartButton();
   });
-
-  bindClick('btn-ending-levels', () => {
-    renderLevelsGrid();
-    showScreen('level-select-screen');
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    syncSound();
+    applyTheme(getThemeSetting());
+    syncProgress();
+    updateStartButton();
   });
-
-  bindClick('btn-ending-reset', () => {
-    showModal('confirm-modal');
-  });
-
-  // Keyboard shortcut Esc/Back navigation helper
-  window.handleEscapeKey = () => {
-    if (!document.getElementById('confirm-modal').classList.contains('hidden')) {
-      hideModal('confirm-modal');
-      return;
-    }
-    if (!document.getElementById('win-modal').classList.contains('hidden')) {
-      return;
-    }
-    const activeScreen = getActiveScreen();
-    if (activeScreen === 'game-screen') {
-      showScreen('home-screen');
-    } else if (activeScreen === 'level-select-screen') {
-      showScreen('home-screen');
-    } else if (activeScreen === 'help-screen') {
-      showScreen(previousScreen);
-    } else if (activeScreen === 'settings-screen') {
-      showScreen('home-screen');
-    } else if (activeScreen === 'ending-screen') {
-      showScreen('home-screen');
-    }
-  };
 }
 
-export function handleEscapeKeyWrapper() {
-  if (window.handleEscapeKey) {
-    window.handleEscapeKey();
-  }
+function syncSound() {
+  const sound = getSoundSetting();
+  setSoundEnabled(sound);
+  updateSoundButtons(sound);
 }
 
-function bindClick(id, callback) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.addEventListener('click', callback);
-  }
-}
-
-export function showScreen(screenId) {
-  document.querySelectorAll('.screen').forEach(scr => {
-    scr.classList.add('hidden');
-  });
-  const activeScr = document.getElementById(screenId);
-  if (activeScr) {
-    activeScr.classList.remove('hidden');
-  }
-}
-
-function getActiveScreen() {
-  const active = Array.from(document.querySelectorAll('.screen')).find(scr => !scr.classList.contains('hidden'));
-  return active ? active.id : 'home-screen';
-}
-
-function showModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
-    modal.classList.remove('hidden');
-  }
-}
-
-function hideModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
-    modal.classList.add('hidden');
-  }
-}
-
-function setThemeUI(theme) {
-  if (theme === 'crt') {
-    document.body.classList.add('theme-crt');
-    document.body.classList.remove('theme-dark');
-  } else {
-    document.body.classList.add('theme-dark');
-    document.body.classList.remove('theme-crt');
-  }
-}
-
-function updateSoundButtonUI(enabled) {
-  const text = `Sound: ${enabled ? 'ON' : 'OFF'}`;
-  const btn1 = document.getElementById('setting-sound');
-  if (btn1) btn1.textContent = text;
-  const btn2 = document.getElementById('btn-sidebar-sound');
-  if (btn2) btn2.textContent = text;
-  const btn3 = document.getElementById('btn-desktop-sound');
-  if (btn3) btn3.textContent = text;
-}
-
-function updateThemeButtonUI(theme) {
-  const text = theme === 'crt' ? 'Theme: CRT' : 'Theme: DARK';
-  const btn1 = document.getElementById('setting-theme');
-  if (btn1) btn1.textContent = theme === 'crt' ? 'Theme: CRT FILTER' : 'Theme: DARK MONOCHROME';
-  const btn2 = document.getElementById('btn-sidebar-theme');
-  if (btn2) btn2.textContent = text;
-  const btn3 = document.getElementById('btn-desktop-theme');
-  if (btn3) btn3.textContent = text;
-}
-
-function handleNextLevelAction() {
-  const isLoaded = nextLevel();
-  if (!isLoaded) {
-    showScreen('ending-screen');
-  }
-}
-
-export function updateHUD() {
-  const lvlText = `Level ${state.currentLevelIndex + 1} / ${levels.length}`;
-  const lvlName = levels[state.currentLevelIndex].name;
-  
-  const displayEl = document.getElementById('level-display');
-  if (displayEl) {
-    displayEl.innerHTML = `<span class="lvl-num">${lvlText}</span><span class="lvl-name">${lvlName}</span>`;
-  }
-
-  // Update all moves counters (mobile + desktop sidebar)
-  document.querySelectorAll('.moves-count-val').forEach(el => {
-    el.textContent = state.moveCount;
-  });
-
-  const bestMoves = getBestMoves();
-  const bestVal = bestMoves[state.currentLevelIndex];
-  
-  // Update all best score counters (mobile + desktop sidebar)
-  document.querySelectorAll('.best-count-val').forEach(el => {
-    el.textContent = bestVal !== undefined ? bestVal : '--';
-  });
-
-  // Toggle gameplay Next button indicators
-  const nextBtns = document.querySelectorAll('#btn-game-next, #btn-sidebar-next');
-  nextBtns.forEach(btn => {
+function syncProgress() {
+  const latest = getProgressEpoch();
+  refreshPickers();
+  if (latest !== epoch) {
+    epoch = latest;
+    byId('win-modal').close();
+    byId('confirm-modal').close();
+    showHome();
+  } else if (activeScreen === 'game-screen') {
+    updateBest();
     if (state.isWin) {
-      btn.classList.remove('hidden');
-    } else {
-      btn.classList.add('hidden');
+      byId('win-best').textContent = progress.best[state.currentLevelIndex] ?? '--';
+      updateNextButtons();
     }
-  });
+  }
+}
 
-  // Keep sidebar level select highlighted
-  renderSidebarLevelsGrid();
+function updateStartButton() {
+  const index = getLastLevel();
+  const moves = getCheckpoint(index, getProgressEpoch(), levels[index].map.join('\n'));
+  byId('btn-start').textContent = moves ? 'Continue Game' : 'Start Game';
+}
+
+function bind(ids, callback) {
+  for (const id of [ids].flat()) byId(id).addEventListener('click', callback);
+}
+
+function startLevel(index) {
+  loadLevel(index);
+  showScreen('game-screen');
+}
+
+function showHome() {
+  flushCheckpoint();
+  updateStartButton();
+  showScreen('home-screen');
+}
+
+function showScreen(id) {
+  if (id === activeScreen) return;
+  byId(activeScreen).hidden = true;
+  activeScreen = id;
+  const screen = byId(id);
+  screen.hidden = false;
+  screen.scrollTop = 0;
+
+  const focus = id === 'game-screen' ? byId('game-board') : screen.querySelector('h1, h2');
+  focus.focus();
+}
+
+export function canPlay() {
+  return activeScreen === 'game-screen' && !byId('win-modal').open;
+}
+
+export function goBack() {
+  if (activeScreen === 'help-screen') {
+    showScreen(helpReturnScreen);
+    if (helpReturnFocus?.getClientRects().length) helpReturnFocus.focus();
+  } else {
+    showHome();
+  }
+}
+
+function updateSoundButtons(enabled) {
+  for (const id of ['setting-sound', 'btn-desktop-sound']) {
+    const button = byId(id);
+    button.textContent = enabled ? 'Sound: ON' : 'Sound: OFF';
+    button.setAttribute('aria-pressed', enabled);
+  }
+}
+
+function applyTheme(theme) {
+  const crt = theme === 'crt';
+  document.body.classList.toggle('theme-crt', crt);
+  document.body.classList.toggle('theme-dark', !crt);
+  for (const id of ['setting-theme', 'btn-desktop-theme']) {
+    const button = byId(id);
+    button.textContent = crt ? 'Theme: CRT' : 'Theme: DARK';
+    button.setAttribute('aria-pressed', crt);
+  }
+}
+
+function nextAction() {
+  if (state.finishedCampaign && progress.completed.size === levels.length) return 'finish';
+  if (state.currentLevelIndex + 1 < levels.length) return 'next';
+  return progress.completed.size === levels.length ? 'finish' : 'levels';
+}
+
+export function advance() {
+  if (activeScreen !== 'game-screen' || !state.isWin) return;
+
+  byId('win-modal').close();
+  switch (nextAction()) {
+    case 'next':
+      loadLevel(state.currentLevelIndex + 1);
+      byId('game-board').focus();
+      break;
+    case 'levels':
+      showScreen('level-select-screen');
+      break;
+    case 'finish':
+      showScreen('ending-screen');
+      break;
+  }
+}
+
+function updateBest() {
+  const moves = progress.best[state.currentLevelIndex] ?? '--';
+  document.querySelectorAll('.best-count-val').forEach(element => { element.textContent = moves; });
+}
+
+export function updateHUD(change) {
+  const { currentLevelIndex, moveCount, isWin } = state;
+  moveCounters.forEach(element => { element.textContent = moveCount; });
+  undoButtons.forEach(button => { button.disabled = moveCount === 0 || isWin; });
+  if (change === 'move') return;
+
+  byId('level-number').textContent = `Level ${currentLevelIndex + 1} / ${levels.length}`;
+  byId('level-name').textContent = levels[currentLevelIndex].name;
+  refreshPickers();
+  updateBest();
+  updateNextButtons();
+}
+
+function updateNextButtons() {
+  const label = { next: 'Next Level', finish: 'Finish Game', levels: 'Remaining Levels' }[nextAction()];
+  for (const id of ['btn-game-next', 'btn-sidebar-next', 'btn-modal-next']) {
+    const button = byId(id);
+    button.textContent = label;
+    if (id !== 'btn-modal-next') button.hidden = !state.isWin;
+  }
 }
 
 export function showWinModal() {
-  const movesEl = document.getElementById('win-moves');
-  if (movesEl) movesEl.textContent = state.moveCount;
-
-  const bestMoves = getBestMoves();
-  const bestVal = bestMoves[state.currentLevelIndex];
-  const bestEl = document.getElementById('win-best');
-  if (bestEl) bestEl.textContent = bestVal !== undefined ? bestVal : '--';
-
-  const modalNextBtn = document.getElementById('btn-modal-next');
-  if (modalNextBtn) {
-    if (state.currentLevelIndex + 1 >= levels.length) {
-      modalNextBtn.textContent = 'Finish Game';
-    } else {
-      modalNextBtn.textContent = 'Next Level';
-    }
-  }
-
-  showModal('win-modal');
+  byId('win-moves').textContent = state.moveCount;
+  byId('win-best').textContent = progress.best[state.currentLevelIndex] ?? '--';
+  byId('win-modal').showModal();
 }
 
-export function renderLevelsGrid() {
-  const gridEl = document.getElementById('levels-grid');
-  if (!gridEl) return;
+function buildLevelPicker(grid, compact = false) {
+  return levels.map((level, index) => {
+    const button = document.createElement('button');
+    button.className = compact ? 'sidebar-level-item' : 'level-cell';
+    button.addEventListener('click', () => startLevel(index));
 
-  gridEl.innerHTML = '';
-  const completed = getCompletedLevels();
-  const bestMoves = getBestMoves();
+    const number = document.createElement('span');
+    number.className = compact ? 'sidebar-level-num' : 'level-cell-number';
+    number.textContent = compact ? level.id : `Lvl ${level.id}`;
+    button.append(number);
 
-  levels.forEach((lvl, index) => {
-    const btn = document.createElement('button');
-    btn.classList.add('level-cell');
-    const isDone = completed.includes(index);
-    if (isDone) {
-      btn.classList.add('completed');
+    const best = document.createElement('span');
+    if (!compact) {
+      const name = document.createElement('span');
+      name.className = 'level-cell-name';
+      name.textContent = level.name;
+      best.className = 'best-score';
+      button.append(name, best);
     }
-    btn.setAttribute('aria-label', `Play level ${lvl.id}: ${lvl.name}`);
 
-    const bestValue = bestMoves[index];
-
-    btn.innerHTML = `
-      <div class="level-cell-number">Lvl ${lvl.id}</div>
-      <div class="level-cell-name">${lvl.name}</div>
-      <div class="level-cell-stats">
-        <span class="best-score">${bestValue !== undefined ? `Best: ${bestValue}` : '--'}</span>
-        ${isDone ? '<span class="done-check">✓</span>' : ''}
-      </div>
-    `;
-
-    btn.addEventListener('click', () => {
-      loadLevel(index);
-      showScreen('game-screen');
-    });
-
-    gridEl.appendChild(btn);
+    const check = document.createElement('span');
+    check.className = compact ? 'sidebar-level-check' : 'done-check';
+    check.textContent = '✓';
+    check.setAttribute('aria-hidden', 'true');
+    button.append(check);
+    grid.append(button);
+    return { button, best, check };
   });
 }
 
-// Renders the quick level selector panel in the desktop sidebar
-export function renderSidebarLevelsGrid() {
-  const gridEl = document.getElementById('sidebar-levels-grid');
-  if (!gridEl) return;
-
-  gridEl.innerHTML = '';
-  const completed = getCompletedLevels();
-
-  levels.forEach((lvl, index) => {
-    const itemBtn = document.createElement('button');
-    itemBtn.classList.add('sidebar-level-item');
-    if (index === state.currentLevelIndex) {
-      itemBtn.classList.add('active');
+function refreshPickers() {
+  progress = getProgress();
+  levels.forEach((level, index) => {
+    const completed = progress.completed.has(index);
+    const score = progress.best[index];
+    const active = index === state.currentLevelIndex;
+    for (const { button, check } of [levelButtons[index], quickButtons[index]]) {
+      button.classList.toggle('completed', completed);
+      button.setAttribute('aria-label', `Play level ${level.id}: ${level.name}${completed ? ', cleared' : ''}${score === undefined ? '' : `, best ${score} moves`}`);
+      check.hidden = !completed;
     }
-    
-    const isDone = completed.includes(index);
-    if (isDone) {
-      itemBtn.classList.add('completed');
-    }
-    itemBtn.innerHTML = `
-      <span class="sidebar-level-num">${lvl.id}</span>
-      ${isDone ? '<span class="sidebar-level-check">✓</span>' : ''}
-    `;
-    itemBtn.setAttribute('aria-label', `Load level ${lvl.id}`);
-
-    itemBtn.addEventListener('click', () => {
-      loadLevel(index);
-    });
-
-    gridEl.appendChild(itemBtn);
+    levelButtons[index].best.textContent = score === undefined ? '--' : `Best: ${score}`;
+    quickButtons[index].button.classList.toggle('active', active);
+    if (active) quickButtons[index].button.setAttribute('aria-current', 'true');
+    else quickButtons[index].button.removeAttribute('aria-current');
   });
 }

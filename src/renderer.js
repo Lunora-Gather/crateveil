@@ -1,167 +1,125 @@
 import { state } from './game.js';
 
-export function renderBoard() {
-  const boardEl = document.getElementById('game-board');
-  if (!boardEl) return;
+let board;
+let viewport;
+let dimensions;
+let fitFrame = 0;
+let lastTiles;
+let cells;
+let playerSprite;
+let crateSprites;
+let chargedSprite;
+let reducedMotion;
 
-  boardEl.innerHTML = '';
-  
-  // Set CSS grid layout columns and rows
-  boardEl.style.gridTemplateColumns = `repeat(${state.width}, var(--cell-size))`;
-  boardEl.style.gridTemplateRows = `repeat(${state.height}, var(--cell-size))`;
+function element(className) {
+  const div = document.createElement('div');
+  div.className = className;
+  return div;
+}
 
-  // Dynamic cell sizing
-  updateCellSize();
-
-  for (let r = 0; r < state.height; r++) {
-    for (let c = 0; c < state.width; c++) {
-      const cellEl = document.createElement('div');
-      cellEl.classList.add('cell');
-
-      const base = state.baseTiles[r][c];
-      const isPlayer = state.player.row === r && state.player.col === c;
-      const isCrate = state.crates.some(crate => crate.row === r && crate.col === c);
-
-      // 1. Draw Static Environment Backgrounds
-      if (base === '#') {
-        cellEl.classList.add('wall');
-        
-        // Add brick-joint line inside walls
-        const wallInner = document.createElement('div');
-        wallInner.classList.add('wall-inner');
-        cellEl.appendChild(wallInner);
-      } else if (base === ' ') {
-        cellEl.classList.add('outside');
-      } else {
-        cellEl.classList.add('floor');
-        
-        // Add floor grid dot decoration
-        const floorInner = document.createElement('div');
-        floorInner.classList.add('floor-inner');
-        cellEl.appendChild(floorInner);
-
-        if (base === 'T') {
-          cellEl.classList.add('target');
-          
-          // Outer target neon portal ring
-          const targetRing = document.createElement('div');
-          targetRing.classList.add('target-ring');
-          cellEl.appendChild(targetRing);
-          
-          // Inner core target dot
-          const targetDot = document.createElement('div');
-          targetDot.classList.add('target-dot');
-          cellEl.appendChild(targetDot);
-        }
-      }
-
-      // 2. Draw Moving Entities
-      if (isPlayer) {
-        const playerEl = document.createElement('div');
-        playerEl.classList.add('player-sprite');
-        
-        // Detailed retro TV robot head
-        const antenna = document.createElement('div');
-        antenna.classList.add('player-antenna');
-        playerEl.appendChild(antenna);
-
-        const screenVisor = document.createElement('div');
-        screenVisor.classList.add('player-visor');
-        
-        const eyes = document.createElement('div');
-        eyes.classList.add('player-eyes');
-        screenVisor.appendChild(eyes);
-        playerEl.appendChild(screenVisor);
-
-        const bodyDetail = document.createElement('div');
-        bodyDetail.classList.add('player-body-trim');
-        playerEl.appendChild(bodyDetail);
-
-        if (base === 'T') {
-          cellEl.classList.add('player-on-target');
-        } else {
-          cellEl.classList.add('player');
-        }
-        cellEl.appendChild(playerEl);
-      } else if (isCrate) {
-        const crateEl = document.createElement('div');
-        crateEl.classList.add('crate-sprite');
-        
-        // Add detailed wood chest reinforcement frames
-        const brace = document.createElement('div');
-        brace.classList.add('crate-brace');
-        crateEl.appendChild(brace);
-
-        // Corner metal brackets
-        const corners = ['tl', 'tr', 'bl', 'br'];
-        corners.forEach(pos => {
-          const corner = document.createElement('div');
-          corner.classList.add('crate-corner', `corner-${pos}`);
-          crateEl.appendChild(corner);
-        });
-
-        // Center rivet/stud
-        const centerStud = document.createElement('div');
-        centerStud.classList.add('crate-stud');
-        crateEl.appendChild(centerStud);
-
-        if (base === 'T') {
-          cellEl.classList.add('crate-on-target');
-          crateEl.classList.add('crate-charged');
-          if (state.justChargedCell && state.justChargedCell.row === r && state.justChargedCell.col === c) {
-            crateEl.classList.add('crate-just-charged');
-          }
-        } else {
-          cellEl.classList.add('crate');
-        }
-        cellEl.appendChild(crateEl);
-      }
-
-      boardEl.appendChild(cellEl);
+export function initRenderer() {
+  board = document.getElementById('game-board');
+  viewport = board.parentElement;
+  reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  new ResizeObserver(([entry]) => {
+    dimensions = entry.contentRect;
+    if (!fitFrame) {
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = 0;
+        fitBoard();
+      });
     }
+  }).observe(viewport);
+  board.addEventListener('animationend', event => {
+    if (event.target === board) board.classList.remove('board-shake');
+  });
+  reducedMotion.addEventListener('change', () => board.classList.remove('board-shake'));
+}
+
+function createBoard() {
+  lastTiles = state.baseTiles;
+  cells = state.baseTiles.map(row => row.map(tile => {
+    const cell = element('cell');
+    if (tile === '#') {
+      cell.classList.add('wall');
+      cell.append(element('wall-inner'));
+    } else if (tile === ' ') {
+      cell.classList.add('outside');
+    } else {
+      cell.classList.add('floor');
+      cell.append(element('floor-inner'));
+      if (tile === 'T') {
+        cell.classList.add('target');
+        cell.append(element('target-ring'), element('target-dot'));
+      }
+    }
+    return cell;
+  }));
+
+  playerSprite = element('player-sprite');
+  const visor = element('player-visor');
+  visor.append(element('player-eyes'));
+  playerSprite.append(element('player-antenna'), visor, element('player-body-trim'));
+
+  crateSprites = state.crates.map(() => {
+    const crate = element('crate-sprite');
+    crate.append(element('crate-brace'), ...['tl', 'tr', 'bl', 'br'].map(corner => element(`crate-corner corner-${corner}`)), element('crate-stud'));
+    return crate;
+  });
+
+  board.classList.remove('board-shake');
+  board.style.setProperty('--columns', state.width);
+  board.style.setProperty('--rows', state.height);
+  board.replaceChildren(...cells.flat());
+  chargedSprite = null;
+  fitBoard();
+}
+
+function putSprite(sprite, { row, col }) {
+  const cell = cells[row][col];
+  if (sprite.parentElement !== cell) cell.append(sprite);
+  return cell;
+}
+
+export function renderBoard() {
+  if (lastTiles !== state.baseTiles) createBoard();
+
+  putSprite(playerSprite, state.player);
+  let placed = 0;
+  const charged = state.crates.reduce((flashing, crate, index) => {
+    const sprite = crateSprites[index];
+    const cell = putSprite(sprite, crate);
+    const onTarget = cell.classList.contains('target');
+    sprite.classList.toggle('crate-charged', onTarget);
+    if (onTarget) placed++;
+    return crate === state.justChargedCell ? sprite : flashing;
+  }, null);
+  if (chargedSprite !== charged) {
+    chargedSprite?.classList.remove('crate-just-charged');
+    charged?.classList.add('crate-just-charged');
+    chargedSprite = charged;
+  }
+
+  const position = ({ row, col }) => `row ${row + 1}, column ${col + 1}`;
+  board.setAttribute('aria-label', `Board, ${state.height} rows by ${state.width} columns. Player at ${position(state.player)}. ${placed} of ${state.crates.length} crates on targets.`);
+}
+
+function fitBoard() {
+  if (!dimensions?.width || !dimensions.height || !state.width) return;
+  const style = getComputedStyle(board);
+  const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const paddingY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  const borderX = parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+  const borderY = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+  const width = (dimensions.width - paddingX - borderX - parseFloat(style.columnGap) * (state.width - 1)) / state.width;
+  const height = (dimensions.height - paddingY - borderY - parseFloat(style.rowGap) * (state.height - 1)) / state.height;
+  const size = Math.max(1, Math.min(72, Math.floor(Math.min(width, height))));
+  const cellSize = `${size}px`;
+  if (board.style.getPropertyValue('--cell-size') !== cellSize) {
+    board.style.setProperty('--cell-size', cellSize);
   }
 }
 
-export function updateCellSize() {
-  const boardEl = document.getElementById('game-board');
-  if (!boardEl || !state.width || !state.height) return;
-
-  const appContainer = document.getElementById('app-container');
-  if (!appContainer) return;
-
-  const appW = appContainer.clientWidth;
-  const appH = appContainer.clientHeight;
-  const isMobile = window.innerWidth <= 768;
-
-  let maxW, maxH;
-
-  if (isMobile) {
-    // Mobile layout: Stacks vertically
-    // Subtract padding of board area (~32px horizontal)
-    maxW = appW - 32;
-    // Heights to subtract: Header (~65px), Stats (~55px), Dpad (~130px), Mobile Footer (~60px)
-    maxH = appH - 310;
-  } else {
-    // Desktop layout: Side-by-side dashboard
-    // Left column width = appWidth - sidebar (300px) - gap (24px) - padding (48px)
-    maxW = appW - 372;
-    // Heights to subtract: Header/divider (~80px), app vertical padding (48px), settings bar (~50px), safety buffer
-    maxH = appH - 200;
-  }
-
-  // Precise subtraction: account for board padding (24px), border (2px), and cell gaps (3px each)
-  const horizontalMargins = 26 + (state.width - 1) * 3;
-  const verticalMargins = 26 + (state.height - 1) * 3;
-
-  const sizeW = Math.floor(Math.max(10, maxW - horizontalMargins) / state.width);
-  const sizeH = Math.floor(Math.max(10, maxH - verticalMargins) / state.height);
-  
-  let cellSize = Math.min(sizeW, sizeH);
-  
-  // Set bounds (expand max cell size from 30px to 72px for visual impact on PC)
-  cellSize = Math.max(30, Math.min(72, cellSize));
-  
-  document.documentElement.style.setProperty('--cell-size', `${cellSize}px`);
+export function shakeBoard() {
+  if (!reducedMotion.matches) board.classList.add('board-shake');
 }
-
-window.addEventListener('resize', updateCellSize);

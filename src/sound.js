@@ -1,242 +1,167 @@
-let soundEnabled = true;
-let audioCtx = null;
+import { saveSoundSetting } from './storage.js';
 
-function getAudioContext() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-  return audioCtx;
+let enabled = true;
+let activated = false;
+let context;
+let output;
+let drone;
+let transition;
+let lastBlocked = -Infinity;
+
+function shouldPlay() {
+  return activated && enabled && !document.hidden;
 }
 
-export function initSound(enabled) {
-  soundEnabled = enabled;
-}
-
-let droneOsc1 = null;
-let droneOsc2 = null;
-let droneGain = null;
-let droneLfo = null;
-let droneLfoGain = null;
-
-export function startAmbientDrone() {
-  if (!soundEnabled) return;
+function syncAudio() {
+  const playing = shouldPlay();
   try {
-    const ctx = getAudioContext();
-    if (droneOsc1) return; // Already running
-    
-    // Create gain node for the drone
-    droneGain = ctx.createGain();
-    droneGain.gain.setValueAtTime(0.04, ctx.currentTime); // Keep it very soft
-    
-    // Lowpass filter to make it warm and deep
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(150, ctx.currentTime);
-    
-    // Osc 1: A1 note (55 Hz)
-    droneOsc1 = ctx.createOscillator();
-    droneOsc1.type = 'sawtooth';
-    droneOsc1.frequency.setValueAtTime(55, ctx.currentTime);
-    
-    // Osc 2: E2 note (82.4 Hz, fifth interval)
-    droneOsc2 = ctx.createOscillator();
-    droneOsc2.type = 'triangle';
-    droneOsc2.frequency.setValueAtTime(82.4, ctx.currentTime);
-    
-    // Slow LFO to modulate filter frequency for movement
-    droneLfo = ctx.createOscillator();
-    droneLfo.type = 'sine';
-    droneLfo.frequency.setValueAtTime(0.05, ctx.currentTime); // 20s cycle
-    
-    droneLfoGain = ctx.createGain();
-    droneLfoGain.gain.setValueAtTime(40, ctx.currentTime); // Modulate filter between 110Hz and 190Hz
-    
-    // Connect LFO
-    droneLfo.connect(droneLfoGain);
-    droneLfoGain.connect(filter.frequency);
-    
-    // Connect audio path
-    droneOsc1.connect(filter);
-    droneOsc2.connect(filter);
-    filter.connect(droneGain);
-    droneGain.connect(ctx.destination);
-    
-    // Start oscillators
-    droneOsc1.start();
-    droneOsc2.start();
-    droneLfo.start();
-  } catch (e) {
-    console.warn("startAmbientDrone failed:", e);
+    if (!context) {
+      if (!playing) return;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      context = new AudioContext();
+      output = context.createGain();
+      output.connect(context.destination);
+    }
+
+    output.gain.value = Number(playing);
+    if (!playing) stopAmbientDrone();
+    if (transition) return;
+
+    if ((context.state === 'running') === playing) {
+      if (playing) startAmbientDrone();
+      return;
+    }
+
+    transition = playing ? context.resume() : context.suspend();
+    transition.then(() => {
+      transition = undefined;
+      if (playing !== shouldPlay()) syncAudio();
+      else if (playing && context.state === 'running') startAmbientDrone();
+    }).catch(() => {
+      transition = undefined;
+      if (playing !== shouldPlay()) syncAudio();
+    });
+  } catch (error) {
+    console.warn('Crateveil audio is unavailable:', error);
   }
 }
 
-export function stopAmbientDrone() {
-  try {
-    if (droneOsc1) {
-      droneOsc1.stop();
-      droneOsc1.disconnect();
-      droneOsc1 = null;
-    }
-    if (droneOsc2) {
-      droneOsc2.stop();
-      droneOsc2.disconnect();
-      droneOsc2 = null;
-    }
-    if (droneLfo) {
-      droneLfo.stop();
-      droneLfo.disconnect();
-      droneLfo = null;
-    }
-    if (droneGain) {
-      droneGain.disconnect();
-      droneGain = null;
-    }
-  } catch (e) {
-    console.warn("stopAmbientDrone failed:", e);
-  }
+export function initSound(soundOn) {
+  enabled = soundOn;
+  const unlock = event => {
+    if (!event.isTrusted) return;
+    activated = true;
+    if (context?.state !== 'running' && enabled) syncAudio();
+  };
+  window.addEventListener('click', unlock, { capture: true });
+  window.addEventListener('keydown', unlock, { capture: true });
+  document.addEventListener('visibilitychange', syncAudio);
+}
+
+function startAmbientDrone() {
+  if (drone) return;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 150;
+  const gain = context.createGain();
+  gain.gain.value = 0.04;
+  filter.connect(gain);
+  gain.connect(output);
+
+  const low = context.createOscillator();
+  low.type = 'sawtooth';
+  low.frequency.value = 55;
+  low.connect(filter);
+  const high = context.createOscillator();
+  high.type = 'triangle';
+  high.frequency.value = 82.4;
+  high.connect(filter);
+
+  const modulation = context.createOscillator();
+  modulation.frequency.value = 0.05;
+  const range = context.createGain();
+  range.gain.value = 40;
+  modulation.connect(range);
+  range.connect(filter.frequency);
+
+  const oscillators = [low, high, modulation];
+  drone = { oscillators, nodes: [...oscillators, range, filter, gain] };
+  oscillators.forEach(oscillator => oscillator.start());
+}
+
+function stopAmbientDrone() {
+  if (!drone) return;
+  drone.oscillators.forEach(oscillator => oscillator.stop());
+  drone.nodes.forEach(node => node.disconnect());
+  drone = null;
+}
+
+export function setSoundEnabled(soundOn) {
+  if (enabled === soundOn) return;
+  enabled = soundOn;
+  syncAudio();
 }
 
 export function toggleSound() {
-  soundEnabled = !soundEnabled;
-  localStorage.setItem('crateveil.sound', soundEnabled ? 'on' : 'off');
-  if (soundEnabled) {
-    startAmbientDrone();
-  } else {
-    stopAmbientDrone();
-  }
-  return soundEnabled;
+  setSoundEnabled(!enabled);
+  saveSoundSetting(enabled);
+  return enabled;
 }
 
-export function playCrateTarget() {
-  if (!soundEnabled) return;
+function withAudio(play) {
+  if (!shouldPlay() || context?.state !== 'running') return;
   try {
-    const ctx = getAudioContext();
-    const now = ctx.currentTime;
-    const notes = [392.00, 523.25]; // G4, C5
-    
-    notes.forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + index * 0.1);
-      
-      gain.gain.setValueAtTime(0.08, now + index * 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + index * 0.1 + 0.2);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start(now + index * 0.1);
-      osc.stop(now + index * 0.1 + 0.2);
-    });
-  } catch (e) {
-    console.warn("Audio playCrateTarget failed:", e);
+    play();
+  } catch (error) {
+    console.warn('Crateveil audio effect is unavailable:', error);
   }
 }
 
-export function isSoundEnabled() {
-  return soundEnabled;
+function tone({ type = 'sine', frequency, endFrequency, volume, duration, delay = 0 }) {
+  const start = context.currentTime + delay;
+  const end = start + duration;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, end);
+  gain.gain.setValueAtTime(volume, start);
+  gain.gain.exponentialRampToValueAtTime(0.01, end);
+  oscillator.connect(gain);
+  gain.connect(output);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
+  oscillator.start(start);
+  oscillator.stop(end);
 }
 
 export function playMove() {
-  if (!soundEnabled) return;
-  try {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.08);
-    
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 0.08);
-  } catch (e) {
-    console.warn("Audio playMove failed:", e);
-  }
+  withAudio(() => tone({ frequency: 140, endFrequency: 70, volume: 0.12, duration: 0.08 }));
 }
 
 export function playPush() {
-  if (!soundEnabled) return;
-  try {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(110, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(50, ctx.currentTime + 0.15);
-    
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-  } catch (e) {
-    console.warn("Audio playPush failed:", e);
-  }
+  withAudio(() => tone({ type: 'triangle', frequency: 110, endFrequency: 50, volume: 0.18, duration: 0.15 }));
 }
 
 export function playBlocked() {
-  if (!soundEnabled) return;
-  try {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(80, ctx.currentTime);
-    
-    gain.gain.setValueAtTime(0.06, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
-  } catch (e) {
-    console.warn("Audio playBlocked failed:", e);
-  }
+  withAudio(() => {
+    if (context.currentTime - lastBlocked < 0.12) return;
+    lastBlocked = context.currentTime;
+    tone({ type: 'sawtooth', frequency: 80, volume: 0.06, duration: 0.1 });
+  });
+}
+
+export function playCrateTarget() {
+  withAudio(() => [392, 523.25].forEach((frequency, index) => {
+    tone({ frequency, volume: 0.08, duration: 0.2, delay: index * 0.1 });
+  }));
 }
 
 export function playWin() {
-  if (!soundEnabled) return;
-  try {
-    const ctx = getAudioContext();
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
-    const now = ctx.currentTime;
-    
-    notes.forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + index * 0.08);
-      
-      gain.gain.setValueAtTime(0.1, now + index * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + index * 0.08 + 0.25);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start(now + index * 0.08);
-      osc.stop(now + index * 0.08 + 0.25);
-    });
-  } catch (e) {
-    console.warn("Audio playWin failed:", e);
-  }
+  withAudio(() => [261.63, 329.63, 392, 523.25].forEach((frequency, index) => {
+    tone({ frequency, volume: 0.1, duration: 0.25, delay: index * 0.08 });
+  }));
 }
