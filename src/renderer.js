@@ -1,9 +1,6 @@
 import { state } from './game.js';
 
 let board;
-let viewport;
-let dimensions;
-let fitFrame = 0;
 let lastTiles;
 let cells;
 let playerSprite;
@@ -19,17 +16,7 @@ function element(className) {
 
 export function initRenderer() {
   board = document.getElementById('game-board');
-  viewport = board.parentElement;
   reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  new ResizeObserver(([entry]) => {
-    dimensions = entry.contentRect;
-    if (!fitFrame) {
-      fitFrame = requestAnimationFrame(() => {
-        fitFrame = 0;
-        fitBoard();
-      });
-    }
-  }).observe(viewport);
   board.addEventListener('animationend', event => {
     if (event.target === board) board.classList.remove('board-shake');
   });
@@ -72,7 +59,6 @@ function createBoard() {
   board.style.setProperty('--rows', state.height);
   board.replaceChildren(...cells.flat());
   chargedSprite = null;
-  fitBoard();
 }
 
 function putSprite(sprite, { row, col }) {
@@ -102,22 +88,6 @@ export function renderBoard() {
 
   const position = ({ row, col }) => `row ${row + 1}, column ${col + 1}`;
   board.setAttribute('aria-label', `Board, ${state.height} rows by ${state.width} columns. Player at ${position(state.player)}. ${placed} of ${state.crates.length} crates on targets.`);
-}
-
-function fitBoard() {
-  if (!dimensions?.width || !dimensions.height || !state.width) return;
-  const style = getComputedStyle(board);
-  const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-  const paddingY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-  const borderX = parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
-  const borderY = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
-  const width = (dimensions.width - paddingX - borderX - parseFloat(style.columnGap) * (state.width - 1)) / state.width;
-  const height = (dimensions.height - paddingY - borderY - parseFloat(style.rowGap) * (state.height - 1)) / state.height;
-  const size = Math.max(1, Math.min(72, Math.floor(Math.min(width, height))));
-  const cellSize = `${size}px`;
-  if (board.style.getPropertyValue('--cell-size') !== cellSize) {
-    board.style.setProperty('--cell-size', cellSize);
-  }
 }
 
 export function shakeBoard() {

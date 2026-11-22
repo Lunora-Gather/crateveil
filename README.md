@@ -27,7 +27,7 @@
 *   **📺 Premium Glassmorphism Console**: A centered glowing game console with a grid backdrop, CRT scanlines, vignette framing, and neon teal borders.
 *   **🔊 Procedural Audio Synthesis**: Ambient background drone hums and action sound effects (steps, pushes, wall bumps, chimes) are synthesized dynamically in code using the browser's native **Web Audio API**—zero audio file downloads required.
 *   **📱 Native-Feel Swipe & D-pad Controls**: Play comfortably on desktop with W/A/S/D or Arrow keys, or on mobile viewports using either the touch-screen D-pad or intuitive swipe gestures.
-*   **🧮 Auto-Responsive Board Scaling**: The board scales to its available space on mobile and desktop. Short viewports can scroll to reach the controls.
+*   **🧮 Auto-Responsive Board Scaling**: The board fits its available space. Touch controls sit below the board in portrait and beside it in landscape, and desktop settings fit in the top bar.
 *   **🌓 Dual Display Modes**: Switch on-the-fly between a realistic **CRT Scanline Filter** mode and a clean, high-contrast **Dark Monochrome** mode.
 *   **💾 Local Data Persistence**: Unfinished boards and their full undo history are saved per level alongside best scores, cleared levels, and preferences. Continue Game resumes the last selected board. Restart clears that board's checkpoint. Reset Progress clears all boards and scores while keeping sound and theme preferences.
 
@@ -100,7 +100,7 @@ To run or build the project locally, use [Node.js](https://nodejs.org/) 20.19+ o
 ## Verification
 
 - `npm test` solves all 15 maps using an independent breadth-first search and replays each solution through the game engine. It also checks checkpoints, legacy saves, interleaved score writes, and the audio lifecycle.
-- `npm run test:safari` builds the production site and opens it in the installed macOS Safari. It clears all 15 levels, checks layout at eight viewport sizes, reloads an unfinished board, and exercises shared storage in two open game pages. It uses an isolated localhost port and leaves existing Safari windows open.
+- `npm run test:safari` builds the production site and opens it in the installed macOS Safari. It clears all 15 levels, checks layout at 12 viewport sizes, and completes levels 6 and 8 with the D-pad through an orientation change. It also tests checkpoint reloads and shared storage in two open game pages on an isolated localhost port.
 
 ## 🌐 Deployment to GitHub Pages
 

@@ -40,11 +40,12 @@ function use(target) {
 const element = id => game.getElementById(id);
 const click = id => element(id).click();
 const active = id => !element(id).hidden;
-const score = () => Number(game.querySelector('.moves-count-val').textContent);
+const score = () => Number(element('game-moves').textContent);
 const levelNumber = () => element('level-number').textContent;
 const modal = () => element('win-modal');
 const currentPlayer = () => game.querySelector('.player-sprite').parentElement;
 const cellIndex = cell => [...element('game-board').children].indexOf(cell);
+const cellSize = () => Number(element('game-board').firstElementChild.getBoundingClientRect().width.toFixed(1));
 
 function key(name, options = {}) {
   const event = new browser.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options });
@@ -53,9 +54,11 @@ function key(name, options = {}) {
 }
 
 function selectLevel(index, fromGame = false) {
-  const desktop = browser.getComputedStyle(game.querySelector('.game-sidebar-column')).display !== 'none';
+  const shortcuts = element('game-level-shortcuts');
+  const desktop = browser.getComputedStyle(shortcuts).display !== 'none';
   const menu = fromGame && desktop ? '#sidebar-levels-grid' : '#levels-grid';
   if (!fromGame) click('btn-levels-menu');
+  else if (desktop && !shortcuts.open) shortcuts.querySelector('summary').click();
   else if (!desktop) click('btn-game-levels');
   game.querySelectorAll(`${menu} button`)[index].click();
 }
@@ -89,34 +92,74 @@ function gesture(end = 'pointerup', distance = 45) {
   pointer(end, distance);
 }
 
-async function checkLayout(index, width, height) {
+function inside(outer, inner) {
+  return inner.left >= outer.left - 1 && inner.right <= outer.right + 1
+    && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+}
+
+function checkLayout(index, width, height) {
   selectLevel(index, true);
 
   const board = element('game-board');
   const stage = board.parentElement;
-  let gap;
-  for (let attempt = 0; attempt < 14; attempt++) {
-    await pause();
-    const b = board.getBoundingClientRect();
-    const s = stage.getBoundingClientRect();
-    gap = Math.min(b.left - s.left, s.right - b.right, b.top - s.top, s.bottom - b.bottom);
-    if (gap >= -1) break;
-  }
-  assert(gap >= -1, `level ${index + 1} board clipped at ${width}×${height} by ${-gap}px`);
   const screen = element('game-screen');
+  const tools = game.querySelector('.game-tools');
+  const description = `level ${index + 1} at ${width}×${height}`;
+  assert(inside(stage.getBoundingClientRect(), board.getBoundingClientRect()), `board clipped at first layout on ${description}`);
+  assert(inside(screen.getBoundingClientRect(), board.getBoundingClientRect()), `board needs scrolling on ${description}`);
   assert(Number(browser.getComputedStyle(screen).opacity) >= 0.75, 'game screen is visible during navigation');
-  assert(screen.scrollWidth <= screen.clientWidth + 1, `horizontal overflow at ${width}×${height}`);
-  const desktop = width >= 769 && browser.matchMedia('(pointer: fine)').matches;
-  const displayed = browser.getComputedStyle(element('btn-desktop-sound').parentElement).display !== 'none';
-  equal(displayed, desktop, 'desktop settings visibility');
+  assert(screen.scrollWidth <= screen.clientWidth + 1, `horizontal overflow on ${description}`);
+
+  const fine = browser.matchMedia('(pointer: fine)').matches;
+  const desktop = width >= 769 && height >= 521 && fine;
+  const landscape = width > height && width >= 480 && (height <= 520 || browser.matchMedia('(pointer: coarse)').matches);
+  const prefs = game.querySelector('.game-preferences');
+  equal(browser.getComputedStyle(prefs).display !== 'none', desktop, 'top bar settings visibility');
   const dpad = element('mobile-controls');
   equal(browser.getComputedStyle(dpad).display !== 'none', !desktop, 'D-pad visibility');
-  if (!desktop) {
-    const controls = element('btn-game-help');
-    controls.scrollIntoView({ block: 'nearest' });
-    assert(controls.getBoundingClientRect().bottom <= screen.getBoundingClientRect().bottom + 1, 'mobile controls are reachable');
-    screen.scrollTop = 0;
+  assert(!element('game-level-shortcuts').open, 'level shortcuts close when selecting a level');
+
+  const toolsBounds = tools.getBoundingClientRect();
+  const boardBounds = stage.getBoundingClientRect();
+  if (desktop || landscape) {
+    assert(toolsBounds.left >= boardBounds.right, `controls are beside the board on ${description}`);
+  } else {
+    assert(toolsBounds.top >= boardBounds.bottom, `controls are below the board on ${description}`);
   }
+
+  if (!desktop) {
+    for (const button of tools.querySelectorAll('.dpad-button, .game-actions button:not([hidden])')) {
+      const hit = button.getBoundingClientRect();
+      assert(hit.width >= 43.99 && hit.height >= 43.99, `touch target ${button.id} is ${hit.width}×${hit.height} CSS px on ${description}`);
+      assert(inside(toolsBounds, hit) && inside(screen.getBoundingClientRect(), hit), `touch target ${button.id} needs scrolling on ${description}`);
+    }
+  }
+
+  return cellSize();
+}
+
+async function solveTouchLevel(solution, firstSize, secondSize) {
+  [frame.width, frame.height] = firstSize;
+  await pause();
+  const firstCell = checkLayout(solution.id - 1, ...firstSize);
+  const split = Math.floor(solution.moves.length / 2);
+  solution.moves.slice(0, split).forEach(move => click(`dpad-${move}`));
+  equal(score(), split, 'touch moves before orientation change');
+  const playerBefore = cellIndex(currentPlayer());
+  [frame.width, frame.height] = secondSize;
+  await pause(100);
+  equal(cellIndex(currentPlayer()), playerBefore, 'orientation change preserved player position');
+  equal(score(), split, 'orientation change preserved moves');
+  assert(inside(element('game-screen').getBoundingClientRect(), element('game-board').getBoundingClientRect()), 'board fits after orientation change');
+  const secondCell = cellSize();
+  solution.moves.slice(split).forEach(move => click(`dpad-${move}`));
+  assert(modal().open, `level ${solution.id} completed with touch controls`);
+  equal(score(), solution.moves.length, 'touch win move count');
+  for (const check of game.querySelectorAll('.crate-charged .crate-stud')) {
+    assert(parseFloat(browser.getComputedStyle(check).borderBottomWidth) >= 1, 'placed crates have a visible check stroke');
+  }
+  click('btn-modal-levels');
+  await log(`Level ${solution.id} · D-pad clear through resize ${firstSize.join('×')} → ${secondSize.join('×')} · ${firstCell}px → ${secondCell}px cells.`);
 }
 
 async function run() {
@@ -139,8 +182,8 @@ async function run() {
 
   click('btn-start');
   equal(levelNumber(), 'Level 1 / 15', 'invalid saved level fallback');
-  equal(game.querySelector('.best-count-val').textContent, '--', 'invalid best score ignored');
-  assert(!active('btn-sidebar-next') && !active('btn-game-next'), 'Next is hidden before clear');
+  equal(element('game-best').textContent, '--', 'invalid best score ignored');
+  assert(!active('btn-game-next'), 'Next is hidden before clear');
   key('n', { shiftKey: true });
   equal(levelNumber(), 'Level 1 / 15', 'no skip shortcut');
 
@@ -151,7 +194,7 @@ async function run() {
   key('ArrowUp');
   equal(score(), 1, 'keyboard movement');
   assert(wall === game.querySelector('.cell.wall'), 'static tiles survive a move');
-  click('btn-sidebar-help');
+  click('btn-game-help');
   key('r');
   key('u');
   equal(score(), 1, 'game commands ignored from help');
@@ -159,7 +202,7 @@ async function run() {
   assert(!key(' '), 'Space retains default behavior in help');
   key('Escape');
   assert(active('game-screen'), 'help returns to game');
-  click('btn-sidebar-undo');
+  click('btn-game-undo');
   equal(score(), 0, 'undo');
   assert(currentPlayer() === originalPlayer, 'undo restored player');
   key('ArrowDown');
@@ -183,6 +226,7 @@ async function run() {
   const savedCrate = cellIndex(game.querySelectorAll('.crate-sprite')[1].parentElement);
   await load();
   equal(element('btn-start').textContent, 'Continue Game', 'reload offers to continue');
+  equal(element('resume-summary').textContent, 'First Push · 2 moves', 'resume shows the level and move count');
   click('btn-start');
   equal(score(), 2, 'reload restored the move count');
   equal(cellIndex(currentPlayer()), savedPlayer, 'reload restored player');
@@ -192,15 +236,19 @@ async function run() {
   key('r');
   click('btn-logo-home');
   equal(element('btn-start').textContent, 'Start Game', 'restart cleared the checkpoint');
+  assert(element('resume-summary').hidden, 'resume details are hidden for a fresh start');
   click('btn-start');
   await log('Reload restored player, crate positions and undo history.');
 
-  const sizes = [[320, 568], [375, 667], [430, 932], [667, 375], [768, 680], [769, 680], [900, 500], [1120, 780]];
+  const sizes = [[320, 568], [390, 844], [430, 932], [568, 320], [667, 375], [844, 390], [932, 430],
+    [768, 680], [769, 680], [900, 500], [1120, 780], [1366, 768]];
   for (const [width, height] of sizes) {
     frame.width = width;
     frame.height = height;
     await pause();
-    for (const [index] of solutions.entries()) await checkLayout(index, width, height);
+    const sizesByLevel = [];
+    for (const [index] of solutions.entries()) sizesByLevel.push(checkLayout(index, width, height));
+    await log(`${width}×${height} · Level 6 ${sizesByLevel[5]}px · Level 8 ${sizesByLevel[7]}px cells`);
   }
   await log(`Board fit verified for all ${solutions.length} maps at ${sizes.length} viewport sizes.`);
 
@@ -264,10 +312,10 @@ async function run() {
   click('btn-levels-back');
   click('btn-start');
   equal(levelNumber(), 'Level 15 / 15', 'last played level survived reload');
-  equal(game.querySelector('.best-count-val').textContent, String(solutions[14].moves.length), 'best survived reload');
+  equal(element('game-best').textContent, String(solutions[14].moves.length), 'best survived reload');
   click('btn-desktop-theme');
   assert(game.body.classList.contains('theme-dark'), 'theme switches from the desktop toolbar');
-  click('btn-sidebar-home');
+  click('btn-logo-home');
   click('btn-settings-menu');
   equal(element('setting-sound').getAttribute('aria-pressed'), 'false', 'sound preference restored');
   click('setting-sound');
@@ -312,6 +360,13 @@ async function run() {
   equal(game.querySelectorAll('#levels-grid .completed').length, 2, 'both scores shown in level selection');
   peer.remove();
   await log('Two same-origin Safari sessions kept best scores and synchronized settings and reset.');
+
+  click('btn-levels-back');
+  click('btn-start');
+  await solveTouchLevel(solutions[5], [390, 844], [844, 390]);
+  click('btn-levels-back');
+  click('btn-start');
+  await solveTouchLevel(solutions[7], [844, 390], [390, 844]);
 
   assert(errors.length === 0, errors.join('\n'));
   await log('PASS · 15/15 cleared · input, dialogs, persistence and responsive layout', true);

@@ -15,14 +15,14 @@ let epoch;
 let progress;
 let levelButtons;
 let quickButtons;
-let moveCounters;
-let undoButtons;
+let moveCounter;
+let undoButton;
 
 export function initUI() {
   levelButtons = buildLevelPicker(byId('levels-grid'));
   quickButtons = buildLevelPicker(byId('sidebar-levels-grid'), true);
-  moveCounters = document.querySelectorAll('.moves-count-val');
-  undoButtons = ['btn-game-undo', 'btn-sidebar-undo'].map(byId);
+  moveCounter = byId('game-moves');
+  undoButton = byId('btn-game-undo');
   epoch = getProgressEpoch();
   refreshPickers();
   updateStartButton();
@@ -35,17 +35,17 @@ export function initUI() {
   bind('btn-start', () => startLevel(getLastLevel()));
   bind('btn-levels-menu', () => showScreen('level-select-screen'));
   bind('btn-settings-menu', () => showScreen('settings-screen'));
-  bind(['btn-help-menu', 'btn-game-help', 'btn-sidebar-help'], event => {
+  bind(['btn-help-menu', 'btn-game-help'], event => {
     helpReturnScreen = activeScreen;
     helpReturnFocus = event.currentTarget;
     showScreen('help-screen');
   });
-  bind(['btn-levels-back', 'btn-settings-back', 'btn-logo-home', 'btn-sidebar-home'], showHome);
+  bind(['btn-levels-back', 'btn-settings-back', 'btn-logo-home'], showHome);
   bind('btn-help-back', goBack);
 
-  bind(['btn-game-restart', 'btn-sidebar-restart'], restartLevel);
-  bind(['btn-game-undo', 'btn-sidebar-undo'], undoMove);
-  bind(['btn-game-next', 'btn-sidebar-next', 'btn-modal-next'], advance);
+  bind('btn-game-restart', restartLevel);
+  bind('btn-game-undo', undoMove);
+  bind(['btn-game-next', 'btn-modal-next'], advance);
   bind(['btn-game-levels', 'btn-modal-levels', 'btn-ending-levels'], () => {
     byId('win-modal').close();
     showScreen('level-select-screen');
@@ -119,8 +119,12 @@ function syncProgress() {
 
 function updateStartButton() {
   const index = getLastLevel();
-  const moves = getCheckpoint(index, getProgressEpoch(), levels[index].map.join('\n'));
-  byId('btn-start').textContent = moves ? 'Continue Game' : 'Start Game';
+  const level = levels[index];
+  const count = getCheckpoint(index, getProgressEpoch(), level.map.join('\n')).length;
+  byId('btn-start').textContent = count ? 'Continue Game' : 'Start Game';
+  const summary = byId('resume-summary');
+  summary.hidden = count === 0;
+  summary.textContent = count ? `${level.name} · ${count} ${count === 1 ? 'move' : 'moves'}` : '';
 }
 
 function bind(ids, callback) {
@@ -129,6 +133,8 @@ function bind(ids, callback) {
 
 function startLevel(index) {
   loadLevel(index);
+  byId('game-level-shortcuts').open = false;
+  if (activeScreen === 'game-screen') byId('game-board').focus({ preventScroll: true });
   showScreen('game-screen');
 }
 
@@ -207,14 +213,13 @@ export function advance() {
 }
 
 function updateBest() {
-  const moves = progress.best[state.currentLevelIndex] ?? '--';
-  document.querySelectorAll('.best-count-val').forEach(element => { element.textContent = moves; });
+  byId('game-best').textContent = progress.best[state.currentLevelIndex] ?? '--';
 }
 
 export function updateHUD(change) {
   const { currentLevelIndex, moveCount, isWin } = state;
-  moveCounters.forEach(element => { element.textContent = moveCount; });
-  undoButtons.forEach(button => { button.disabled = moveCount === 0 || isWin; });
+  moveCounter.textContent = moveCount;
+  undoButton.disabled = moveCount === 0 || isWin;
   if (change === 'move') return;
 
   byId('level-number').textContent = `Level ${currentLevelIndex + 1} / ${levels.length}`;
@@ -226,11 +231,10 @@ export function updateHUD(change) {
 
 function updateNextButtons() {
   const label = { next: 'Next Level', finish: 'Finish Game', levels: 'Remaining Levels' }[nextAction()];
-  for (const id of ['btn-game-next', 'btn-sidebar-next', 'btn-modal-next']) {
-    const button = byId(id);
-    button.textContent = label;
-    if (id !== 'btn-modal-next') button.hidden = !state.isWin;
-  }
+  const next = byId('btn-game-next');
+  next.textContent = label;
+  next.hidden = !state.isWin;
+  byId('btn-modal-next').textContent = label;
 }
 
 export function showWinModal() {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#090b11">
   <title>Crateveil - A Retro Sokoban Puzzle Game</title>
   <meta name="description" content="A retro CRT style Sokoban puzzle game. Push the crates, reveal the maze. Desktop keyboard and mobile touch D-pad supported.">
@@ -38,7 +38,8 @@
       </div>
 
       <div class="menu-buttons">
-        <button id="btn-start" class="game-button primary-btn">Start Game</button>
+        <button id="btn-start" class="game-button primary-btn" aria-describedby="resume-summary">Start Game</button>
+        <p id="resume-summary" class="resume-summary" hidden></p>
         <button id="btn-levels-menu" class="game-button" aria-label="Level Select">Level Select</button>
         <button id="btn-help-menu" class="game-button" aria-label="How to Play">How to Play</button>
         <button id="btn-settings-menu" class="game-button" aria-label="Settings">Settings</button>
@@ -50,7 +51,6 @@
       </footer>
     </section>
 
-    <!-- 2. GAME SCREEN (Dashboard Layout) -->
     <section id="game-screen" class="screen" hidden>
       <header class="game-header">
         <button class="game-logo" id="btn-logo-home" aria-label="Back to main menu">CRATEVEIL</button>
@@ -58,91 +58,49 @@
           <span class="lvl-num" id="level-number"></span>
           <span class="lvl-name" id="level-name"></span>
         </div>
+        <div class="game-preferences" role="group" aria-label="Display and sound">
+          <button id="btn-desktop-sound" class="control-btn" aria-label="Sound effects" aria-pressed="true">Sound: ON</button>
+          <button id="btn-desktop-theme" class="control-btn" aria-label="CRT filter" aria-pressed="true">Theme: CRT</button>
+        </div>
       </header>
+
       <div class="game-layout-wrapper">
-        
-        <!-- Left Column: Primary Board Screen -->
-        <div class="game-main-column">
+        <main class="game-viewport">
+          <div id="game-board" class="board" role="img" tabindex="0"></div>
+        </main>
 
-          <!-- Mobile Only Stats (hidden on desktop) -->
-          <div class="stats-panel mobile-only-hud">
+        <aside class="game-tools" aria-label="Game controls">
+          <dl class="stats-panel">
             <div class="stat-box">
-              <span class="stat-label">Moves</span>
-              <span class="stat-val moves-count-val">0</span>
-            </div>
-            <div class="stat-box">
-              <span class="stat-label">Best</span>
-              <span class="stat-val best-count-val">--</span>
-            </div>
-          </div>
-
-          <!-- Desktop Settings Bar (hidden on mobile) -->
-          <div class="desktop-settings-bar">
-            <span class="settings-label">Settings:</span>
-            <button id="btn-desktop-sound" class="desktop-setting-btn" aria-label="Sound effects" aria-pressed="true">Sound: ON</button>
-            <button id="btn-desktop-theme" class="desktop-setting-btn" aria-label="CRT filter" aria-pressed="true">Theme: CRT</button>
-          </div>
-
-          <main class="game-viewport">
-            <div id="game-board" class="board" role="img" tabindex="0"></div>
-          </main>
-
-          <!-- Mobile Only D-pad (hidden on desktop) -->
-          <div id="mobile-controls" class="dpad-container">
-            <div class="dpad-row">
-              <button id="dpad-up" class="dpad-button" aria-label="Move Up">▲</button>
-            </div>
-            <div class="dpad-row">
-              <button id="dpad-left" class="dpad-button" aria-label="Move Left">◀</button>
-              <div class="dpad-center">●</div>
-              <button id="dpad-right" class="dpad-button" aria-label="Move Right">▶</button>
-            </div>
-            <div class="dpad-row">
-              <button id="dpad-down" class="dpad-button" aria-label="Move Down">▼</button>
-            </div>
-          </div>
-
-          <!-- Mobile Only Bottom Controls (hidden on desktop) -->
-          <footer class="game-controls-menu mobile-only-hud">
-            <button id="btn-game-restart" class="control-btn" aria-label="Restart Level">Restart</button>
-            <button id="btn-game-undo" class="control-btn" aria-label="Undo Move">Undo</button>
-            <button id="btn-game-next" class="control-btn" hidden>Next</button>
-            <button id="btn-game-levels" class="control-btn" aria-label="Back to Level Select">Levels</button>
-            <button id="btn-game-help" class="control-btn" aria-label="How to Play Help">Help</button>
-          </footer>
-        </div>
-
-        <!-- Right Column: Sidebar Console (Desktop only, hidden on mobile) -->
-        <div class="game-sidebar-column">
-          <div class="sidebar-section-title">DASHBOARD</div>
-          
-          <div class="stats-panel">
-            <div class="stat-box">
-              <span class="stat-label">Moves</span>
-              <span class="stat-val moves-count-val">0</span>
+              <dt class="stat-label">Moves</dt>
+              <dd class="stat-val" id="game-moves">0</dd>
             </div>
             <div class="stat-box">
-              <span class="stat-label">Best</span>
-              <span class="stat-val best-count-val">--</span>
+              <dt class="stat-label">Best</dt>
+              <dd class="stat-val" id="game-best">--</dd>
             </div>
+          </dl>
+
+          <div id="mobile-controls" class="dpad-container" role="group" aria-label="Movement">
+            <button id="dpad-up" class="dpad-button" aria-label="Move Up">▲</button>
+            <button id="dpad-left" class="dpad-button" aria-label="Move Left">◀</button>
+            <button id="dpad-right" class="dpad-button" aria-label="Move Right">▶</button>
+            <button id="dpad-down" class="dpad-button" aria-label="Move Down">▼</button>
           </div>
 
-          <div class="sidebar-section-title">CONTROLS</div>
-          <div class="sidebar-controls-group">
-            <button id="btn-sidebar-restart" class="sidebar-btn" aria-label="Restart Level">Restart [R]</button>
-            <button id="btn-sidebar-undo" class="sidebar-btn" aria-label="Undo Move">Undo [U]</button>
-            <button id="btn-sidebar-next" class="sidebar-btn primary-btn" hidden>Next [N]</button>
+          <div class="game-actions">
+            <button id="btn-game-undo" class="control-btn" aria-label="Undo Move" aria-keyshortcuts="U">Undo</button>
+            <button id="btn-game-restart" class="control-btn" aria-label="Restart Level" aria-keyshortcuts="R">Restart</button>
+            <button id="btn-game-next" class="control-btn primary-btn" aria-keyshortcuts="N" hidden>Next Level</button>
+            <button id="btn-game-levels" class="control-btn" aria-label="Level Select">Levels</button>
+            <button id="btn-game-help" class="control-btn" aria-label="How to Play">Help</button>
           </div>
 
-          <div class="sidebar-section-title">QUICK LOAD</div>
-          <div id="sidebar-levels-grid" class="sidebar-levels-grid"></div>
-
-          <div class="sidebar-footer">
-            <button id="btn-sidebar-help" class="sidebar-footer-btn" aria-label="How to play instructions">Help</button>
-            <button id="btn-sidebar-home" class="sidebar-footer-btn" aria-label="Back to home menu">Menu</button>
-          </div>
-        </div>
-
+          <details class="level-shortcuts" id="game-level-shortcuts">
+            <summary class="control-btn">Level Select</summary>
+            <div id="sidebar-levels-grid" class="sidebar-levels-grid"></div>
+          </details>
+        </aside>
       </div>
     </section>
 
